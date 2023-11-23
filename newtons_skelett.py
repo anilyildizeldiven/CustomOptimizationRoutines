@@ -5,7 +5,7 @@ class MyNewtonOptimizer(optimizers.Optimizer):
     def __init__(self, learning_rate=0.001, name="MyNewtonOptimizer", **kwargs):
         """Call super().__init__() and store hyperparameters"""
         super().__init__(name, **kwargs)
-        self._set_hyper("learning_rate", kwargs.get("lr", learning_rate))
+        self._learning_rate = learning_rate
 
 
     @tf.function
