@@ -40,7 +40,8 @@ class NewtonOptimizer(optimizer_v2.OptimizerV2):
         var_update = var - coefficients["lr_t"] * grad / (new_accumulator + 1e-8)  # Update var using Newton's method
 
         var.assign(var_update)  # Assign the updated value back to the variable
-
+        return var_update
+        
     def _resource_apply_sparse(self, grad, var, indices, apply_state=None):
         var_device, var_dtype = var.device, var.dtype.base_dtype
         coefficients = ((apply_state or {}).get((var_device, var_dtype))
@@ -52,7 +53,7 @@ class NewtonOptimizer(optimizer_v2.OptimizerV2):
         var_update = var - coefficients["lr_t"] * grad / (new_accumulator + 1e-8)  # Update var using Newton's method
 
         var.scatter_sub(indices, var - var_update)  # Update var for sparse tensors
-
+        return var_update
     def get_config(self):
         config = super(NewtonOptimizer, self).get_config()
         config.update({
