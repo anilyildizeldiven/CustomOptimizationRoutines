@@ -1,3 +1,8 @@
+#https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/keras/optimizer_v2/gradient_descent.py
+
+# code vom sgd keras wurde übernommen und angepasst
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
