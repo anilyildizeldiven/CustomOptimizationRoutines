@@ -1,0 +1,152 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.utils import to_categorical
+import matplotlib.pyplot as plt
+
+
+#When you need to customize what fit() does, you should override the training step function of the Model class. 
+#This is the function that is called by fit() for every batch of data. 
+#You will then be able to call fit() as usual -- and it will be running your own learning algorithm.
+
+#Note that this pattern does not prevent you from building models with the Functional API. 
+#You can do this whether you're building Sequential models, Functional API models, or subclassed models.
+
+
+
+
+# Custom Model with Newton's Method
+class NewtonOptimizedModel(Model): #subclass model class
+    def __init__(self): #defines the layers
+    #By subclassing the Model class: in that case, you should define your layers in __init__() and you should implement the model's forward pass in call().
+    #More Information: https://keras.io/api/models/model/
+        super(NewtonOptimizedModel, self).__init__()
+        self.dense1 = Dense(8, activation='relu', input_shape=(4,))
+        self.dense2 = Dense(3, activation='softmax')
+
+    def call(self, inputs): #defines forward pass through the layers
+        x = self.dense1(inputs)
+        return self.dense2(x)
+
+    def train_step(self, data): #override standard train_step method
+        x, y = data #what is y?
+
+        with tf.GradientTape(persistent=True) as t2: #outer tape t2 computes hessian; marked as persistent as used twice: For Hessian and Gradient
+            with tf.GradientTape() as t1:
+                y_pred = self(x, training=True) #Forward pass: layer 1 & 2 (here as x)
+                loss = self.compiled_loss(y, y_pred) #Why not self.compute_loss which wraps the loss function that were passed compile()?
+            g = t1.gradient(loss, self.dense1.kernel) # innter tape t1 gradient (=g) with loss  of layer 1
+           
+            if g is not None: # what if g is None?
+                #The Hessian is the Jacobian of the gradient, representing the second-order partial derivatives of the loss function.
+                h = t2.jacobian(g, self.dense1.kernel) #The gradient of the loss with respect to the kernel of dense1 is computed.
+                
+                # Flatten out the axes of the Hessian and gradient
+                #The gradient and Hessian are reshaped into a vector and a matrix, respectively. This is necessary because the Hessian is a 4-dimensional tensor due to the shapes of the gradient and the kernel, but for Newton's method, we need to work with a matrix.
+                n_params = tf.reduce_prod(self.dense1.kernel.shape)
+                g_vec = tf.reshape(g, [n_params, 1])
+                h_mat = tf.reshape(h, [n_params, n_params])
+               
+                # Newton's method update step #Newton's method update step is applied: the update is computed by solving a linear system where the Hessian matrix is modified by adding a small value (eps) to its diagonal to ensure numerical stability.
+                #In the standard Newton's method, the update step is computed as H^-1 g where H is the Hessian matrix and g is the gradient vector. 
+                #However, the Hessian might be singular (non-invertible) or nearly singular, which can cause numerical instability.
+                #To ensure stability, a small value (eps, here 1e-3) is added to the diagonal of the Hessian matrix. This technique, known as regularization or damping, makes the Hessian matrix more stable for inversion.
+                eps = 1e-3
+                eye_eps = tf.eye(h_mat.shape[0]) * eps # creates a diagonal matrix with eps along the diagonal and adds it to the Hessian
+                update = tf.linalg.solve(h_mat + eye_eps, g_vec) #tf.linalg.solve is then used to solve the linear system (h_mat + eye_eps) * update = g_vec, effectively computing H^-1 g for the update.
+                # Reshape the update and apply it to the variable
+                self.dense1.kernel.assign_sub(tf.reshape(update, self.dense1.kernel.shape)) #The update calculated from Newton's method is subtracted from the kernel of self.dense1 using assign_sub. This adjusts the weights of the model based on the computed update.
+                #The update step's length is implicitly determined by the inverse of the modified Hessian matrix. In Newton's method, the step length is intrinsically linked to how the inverse Hessian scales the gradient.
+                
+                #While this is relatively simple for a single tf.Variable, applying this to a non-trivial model would require careful concatenation and slicing to produce a full Hessian across multiple variables. 
+                # -> HOW?
+
+        del t2   #The persistent tape (t2) is deleted to free up resources.
+        self.compiled_metrics.update_state(y, y_pred) # why not metric.update_state(y, y_pred) on metrics from self.metrics, 
+                                                      #to update the state of the metrics that were passed in compile(), and we query results from self.metrics at the end to retrieve their current value?
+        return {m.name: m.result() for m in self.metrics}
+        #The model's metrics are updated with the predictions and actual labels, and the metrics' results are returned.
+
+#IMPORTANT: This is only an uodate of the First Layer weights! What about Biases?
+#Change so Variables across ALL Layers all updated!
+ 
+
+#TO DOs: 
+    # 1. Wie kann das Modell flexibler gemacht werden? -> Wie Fügt man unter __init__ weitere layers hinzu ohne die Logik des Optimizers zu ändern und ohne den Code komplett überarbeiten zu müssen? Wie kann man das vereinfachen?
+    # 2. Wie Ruft man die Hesse Matrix ab? Wo wird diese Gespiechert (Wird später notwendig für die Unit Tests bzw. um zu überprüfen ob die Hesse korrekt berechnet wurde)
+    # 3. Kann die Hesse Matrix das falshce Format zur Berechnung haben? Falls ja, wann apssiert das und wie kann man das vermeiden? Check: symmetry described in: https://www.tensorflow.org/guide/advanced_autodiff#hessian
+    # 4. Werden bei dem Code, wie er gerade ist, nur die Weights, oder auch die Biases upgedated? -> Es sollen en ALLE Variablen upgedated werden!
+    # 5. Was muss man ändern, dass nicht nur die Variablen von Layer 1, sondern die aller Layer upgedated werden? -> #Check: About variables: https://chromium.googlesource.com/external/github.com/tensorflow/tensorflow/+/r0.10/tensorflow/g3doc/how_tos/variables/index.md
+    # 6. Welche Hyperparameter muss man einstellen? Wo werden die Hyperparameter definiert bzw. wo kann man definieren welche geändert werden können? -> Wichtig, denn e.g. batch_size sollte per default =X_train.shape[0] sein
+    # 7. Was passiert wenn Gradient nicht bestimmbar ist (g is None)?
+    # 8. Stimmt die Mathematische Logik ?
+
+   
+
+
+
+
+# Optionally call summary() and get_layer() method in Model class
+
+# Load dataset
+file_path = '/Users/davidasselalou/Desktop/Applied_DL_routine/iris.csv'
+data = pd.read_csv(file_path)
+
+# Preprocess data
+X = data.iloc[:, 0:4].values
+y = data.iloc[:, 4].values
+
+# Encode class values as integers
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+
+# Convert integers to dummy variables (i.e. one hot encoded)
+dummy_y = to_categorical(encoded_Y)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, 
+                                                    dummy_y, 
+                                                    test_size=0.2, 
+                                                    random_state=42)
+
+# Create and compile model
+model = NewtonOptimizedModel()
+model.compile(loss='categorical_crossentropy', 
+              metrics=['accuracy'])
+#Wich other metrices?
+
+# Set batch size
+batch_size = X_train.shape[0]
+
+# Train model
+model.fit(X_train, 
+          y_train, 
+          batch_size=batch_size, 
+          epochs=400, 
+          verbose=1, 
+          validation_split=0.2)
+
+# Evaluate the model
+scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+print(f"Accuracy: {scores[1]*100}")
+
+#General To Do:
+    #1. Build Model
+    #2. Test
+    #3. Document
+    #4. Run Benchmarks
+    #5. Sub-Class Method
+
+
+#Helpful Links: 
+    #Newtons method:
+        #https://www.youtube.com/watch?v=28BMpgxn_Ec
+        #https://www.youtube.com/watch?v=uNDVfRq59Co
+        #https://jermwatt.github.io/machine_learning_refined/notes/4_Second_order_methods/4_4_Newtons.html
+        #https://mmcryptogem.medium.com/training-a-neural-network-using-newtons-method-d02da8843133
+    #Keras
+        #https://keras.io/getting_started/intro_to_keras_for_engineers/
