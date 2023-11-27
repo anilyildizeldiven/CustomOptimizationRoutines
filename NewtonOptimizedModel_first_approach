@@ -86,7 +86,11 @@ class NewtonOptimizedModel(Model): #subclass model class
                 # Reshape the update and apply it to the variable
                 self.dense1.kernel.assign_sub(tf.reshape(update, self.dense1.kernel.shape)) #The update calculated from Newton's method is subtracted from the kernel of self.dense1 using assign_sub. This adjusts the weights of the model based on the computed update.
                 #The update step's length is implicitly determined by the inverse of the modified Hessian matrix. In Newton's method, the step length is intrinsically linked to how the inverse Hessian scales the gradient.
-                
+                else:
+                # WennGradient None --> Lognachricht ausgegeben + die Parameteraktualisierung überspringen
+                print("Gradient for dense1.kernel is None. Skipping parameter update.")
+
+                #Finite-Differenzen-Methode als Backup Methode?
                 #While this is relatively simple for a single tf.Variable, applying this to a non-trivial model would require careful concatenation and slicing to produce a full Hessian across multiple variables. 
                 # -> HOW?
 
