@@ -20,10 +20,13 @@ import matplotlib.pyplot as plt
 
 # Custom Model with Newton's Method
 class NewtonOptimizedModel(Model): #subclass model class
-    def __init__(self): #defines the layers
+    def __init__(self, learning_rate=0.001, batch_size=32, epsilon=1e-3): #defines the layers
     #By subclassing the Model class: in that case, you should define your layers in __init__() and you should implement the model's forward pass in call().
     #More Information: https://keras.io/api/models/model/
         super(NewtonOptimizedModel, self).__init__()
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.epsilon = epsilon
         self.dense1 = Dense(8, activation='relu', input_shape=(4,))
         self.dense2 = Dense(3, activation='softmax')
 
@@ -54,8 +57,8 @@ class NewtonOptimizedModel(Model): #subclass model class
                 #In the standard Newton's method, the update step is computed as H^-1 g where H is the Hessian matrix and g is the gradient vector. 
                 #However, the Hessian might be singular (non-invertible) or nearly singular, which can cause numerical instability.
                 #To ensure stability, a small value (eps, here 1e-3) is added to the diagonal of the Hessian matrix. This technique, known as regularization or damping, makes the Hessian matrix more stable for inversion.
-                eps = 1e-3
-                eye_eps = tf.eye(h_mat.shape[0]) * eps # creates a diagonal matrix with eps along the diagonal and adds it to the Hessian
+                
+                eye_eps = tf.eye(h_mat.shape[0]) * self.epsilon # creates a diagonal matrix with eps along the diagonal and adds it to the Hessian
                 update = tf.linalg.solve(h_mat + eye_eps, g_vec) #tf.linalg.solve is then used to solve the linear system (h_mat + eye_eps) * update = g_vec, effectively computing H^-1 g for the update.
                 # Reshape the update and apply it to the variable
                 self.dense1.kernel.assign_sub(tf.reshape(update, self.dense1.kernel.shape)) #The update calculated from Newton's method is subtracted from the kernel of self.dense1 using assign_sub. This adjusts the weights of the model based on the computed update.
