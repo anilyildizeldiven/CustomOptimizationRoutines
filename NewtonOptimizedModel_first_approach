@@ -140,7 +140,7 @@ X_train, X_test, y_train, y_test = train_test_split(X,
                                                     random_state=42)
 
 # Create and compile model
-model = NewtonOptimizedModel()
+model = NewtonOptimizedModel(learning_rate=0.001, batch_size=64, epsilon=1e-4)
 model.compile(loss='categorical_crossentropy', 
               metrics=['accuracy'])
 #Wich other metrices?
