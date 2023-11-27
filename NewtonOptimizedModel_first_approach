@@ -30,6 +30,29 @@ class NewtonOptimizedModel(Model): #subclass model class
         self.dense1 = Dense(8, activation='relu', input_shape=(4,))
         self.dense2 = Dense(3, activation='softmax')
 
+####################################
+
+'    def __init__(self, num_layers=3, num_neurons=64, dropout_rate=0.2, activation='relu'):
+        super(CustomModel, self).__init__()
+        self.num_layers = num_layers
+        self.num_neurons = num_neurons
+        self.dropout_rate = dropout_rate
+        self.activation = activation
+
+        self.flatten = tf.keras.layers.Flatten()
+        self.hidden_layers = [tf.keras.layers.Dense(num_neurons, activation=activation) for _ in range(num_layers)]
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
+        self.output_layer = tf.keras.layers.Dense(10, activation='softmax')'
+
+    def call(self, inputs):
+        x = self.flatten(inputs)
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = self.dropout(x)
+        return self.output_layer(x)
+
+#################################
+
     def call(self, inputs): #defines forward pass through the layers
         x = self.dense1(inputs)
         return self.dense2(x)
