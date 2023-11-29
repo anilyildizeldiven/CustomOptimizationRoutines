@@ -20,38 +20,12 @@ import matplotlib.pyplot as plt
 
 # Custom Model with Newton's Method
 class NewtonOptimizedModel(Model): #subclass model class
-    def __init__(self, learning_rate=0.001, batch_size=32, epsilon=1e-3): #defines the layers
+    def __init__(self): #defines the layers
     #By subclassing the Model class: in that case, you should define your layers in __init__() and you should implement the model's forward pass in call().
     #More Information: https://keras.io/api/models/model/
         super(NewtonOptimizedModel, self).__init__()
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
-        self.epsilon = epsilon
         self.dense1 = Dense(8, activation='relu', input_shape=(4,))
         self.dense2 = Dense(3, activation='softmax')
-
-####################################
-
-#    def __init__(self, num_layers=3, num_neurons=64, dropout_rate=0.2, activation='relu'):
-#        super(CustomModel, self).__init__()
-#        self.num_layers = num_layers
-#        self.num_neurons = num_neurons
-#        self.dropout_rate = dropout_rate
-#        self.activation = activation
-#
-#        self.flatten = tf.keras.layers.Flatten()
-#        self.hidden_layers = [tf.keras.layers.Dense(num_neurons, activation=activation) for _ in range(num_layers)]
-#        self.dropout = tf.keras.layers.Dropout(dropout_rate)
-#        self.output_layer = tf.keras.layers.Dense(10, activation='softmax')'
-#
-#    def call(self, inputs):
-#        x = self.flatten(inputs)
-#        for layer in self.hidden_layers:
-#            x = layer(x)
-#            x = self.dropout(x)
-#        return self.output_layer(x) 
-#
-#################################
 
     def call(self, inputs): #defines forward pass through the layers
         x = self.dense1(inputs)
@@ -80,17 +54,13 @@ class NewtonOptimizedModel(Model): #subclass model class
                 #In the standard Newton's method, the update step is computed as H^-1 g where H is the Hessian matrix and g is the gradient vector. 
                 #However, the Hessian might be singular (non-invertible) or nearly singular, which can cause numerical instability.
                 #To ensure stability, a small value (eps, here 1e-3) is added to the diagonal of the Hessian matrix. This technique, known as regularization or damping, makes the Hessian matrix more stable for inversion.
-                
-                eye_eps = tf.eye(h_mat.shape[0]) * self.epsilon # creates a diagonal matrix with eps along the diagonal and adds it to the Hessian
+                eps = 1e-3
+                eye_eps = tf.eye(h_mat.shape[0]) * eps # creates a diagonal matrix with eps along the diagonal and adds it to the Hessian
                 update = tf.linalg.solve(h_mat + eye_eps, g_vec) #tf.linalg.solve is then used to solve the linear system (h_mat + eye_eps) * update = g_vec, effectively computing H^-1 g for the update.
                 # Reshape the update and apply it to the variable
                 self.dense1.kernel.assign_sub(tf.reshape(update, self.dense1.kernel.shape)) #The update calculated from Newton's method is subtracted from the kernel of self.dense1 using assign_sub. This adjusts the weights of the model based on the computed update.
                 #The update step's length is implicitly determined by the inverse of the modified Hessian matrix. In Newton's method, the step length is intrinsically linked to how the inverse Hessian scales the gradient.
-                else:
-                # WennGradient None --> Lognachricht ausgegeben + die Parameteraktualisierung überspringen
-                print("Gradient for dense1.kernel is None. Skipping parameter update.")
-
-                #Finite-Differenzen-Methode als Backup Methode?
+                
                 #While this is relatively simple for a single tf.Variable, applying this to a non-trivial model would require careful concatenation and slicing to produce a full Hessian across multiple variables. 
                 # -> HOW?
 
@@ -144,7 +114,7 @@ X_train, X_test, y_train, y_test = train_test_split(X,
                                                     random_state=42)
 
 # Create and compile model
-model = NewtonOptimizedModel(learning_rate=0.001, batch_size=64, epsilon=1e-4)
+model = NewtonOptimizedModel()
 model.compile(loss='categorical_crossentropy', 
               metrics=['accuracy'])
 #Wich other metrices?
