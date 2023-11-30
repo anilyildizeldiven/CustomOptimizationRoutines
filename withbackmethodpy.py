@@ -1,9 +1,8 @@
-import numpy as np
-from scipy.optimize import approx_fprime
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense
 import tensorflow_probability as tfp
+import pandas as pd
 
 class NewtonOptimizedModel(Model):
     def __init__(self, learning_rate=0.001, batch_size=32, epsilon=1e-3):
@@ -17,7 +16,10 @@ class NewtonOptimizedModel(Model):
     def call(self, inputs):
         x = self.dense1(inputs)
         return self.dense2(x)
- 
+
+    def asymmetric_case(self, h_mat):
+        return 0.5 * (h_mat + tf.transpose(h_mat))
+
     def train_step(self, data):
         x, y = data
 
@@ -36,7 +38,11 @@ class NewtonOptimizedModel(Model):
             g_vec = tf.reshape(g, [n_params, 1])
             h_mat = tf.reshape(h, [n_params, n_params])
 
+            is_symmetric = tf.reduce_all(tf.equal(h_mat, tf.transpose(h_mat)))
+            h_mat = tf.cond(is_symmetric, lambda: h_mat, lambda: self.asymmetric_case(h_mat))
+
             eye_eps = tf.eye(h_mat.shape[0]) * self.epsilon
+            
             update = tf.linalg.solve(h_mat + eye_eps, g_vec)
             self.dense1.kernel.assign_sub(tf.reshape(update, self.dense1.kernel.shape))
 
