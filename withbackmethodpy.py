@@ -16,7 +16,7 @@ class NewtonOptimizedModel(Model):
     def call(self, inputs):
         x = self.dense1(inputs)
         return self.dense2(x)
-
+#https://stackoverflow.com/questions/36697736/how-to-force-tensorflow-tensors-to-be-symmetric
     def asymmetric_case(self, h_mat):
         return 0.5 * (h_mat + tf.transpose(h_mat))
 
@@ -29,7 +29,7 @@ class NewtonOptimizedModel(Model):
                 loss = self.compiled_loss(y, y_pred)
             g = t1.gradient(loss, self.dense1.kernel)
             if g is None:
-                # Approximation des Gradienten mit tfp.math.value_and_gradient
+                # Approximation des Gradienten mit tfp.math.value_and_gradient => finite difference method
                 g = tfp.math.value_and_gradient(lambda var: self.compiled_loss(y, self(x)), self.dense1.kernel)[1]
 
             h = t2.jacobian(g, self.dense1.kernel)
@@ -39,7 +39,9 @@ class NewtonOptimizedModel(Model):
             h_mat = tf.reshape(h, [n_params, n_params])
 
             is_symmetric = tf.reduce_all(tf.equal(h_mat, tf.transpose(h_mat)))
-            h_mat = tf.cond(is_symmetric, lambda: h_mat, lambda: self.asymmetric_case(h_mat))
+            # ist eine if then klausel in tensorflow
+            #https://stackoverflow.com/questions/35833011/how-to-add-if-condition-in-a-tensorflow-graph
+            h_mat = tf.cond(is_symmetric, lambda: self.asymmetric_case(h_mat), lambda: h_mat)
 
             eye_eps = tf.eye(h_mat.shape[0]) * self.epsilon
             
