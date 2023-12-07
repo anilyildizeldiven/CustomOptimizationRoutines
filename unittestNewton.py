@@ -60,8 +60,28 @@ class NewtonOptimizedModel(Model):
                 self.compiled_metrics.update_state(y, y_pred)
                 return {m.name: m.result() for m in self.metrics}
             
-            
-            
+   file_path = '/Users/anilcaneldiven/Desktop/iris.csv'
+   data = pd.read_csv(file_path)
+    X = data.iloc[:, 0:4].values
+    y = data.iloc[:, 4].values
+    encoder = LabelEncoder()
+    encoder.fit(y)
+    encoded_Y = encoder.transform(y)
+   dummy_y = to_categorical(encoded_Y)
+   X_train, X_test, y_train, y_test = train_test_split(X, dummy_y, test_size=0.2, random_state=42)
+    model = NewtonOptimizedModel()
+   model.compile(loss='categorical_crossentropy', metrics=['accuracy'])
+  batch_size = X_train.shape[0]
+    model.fit(X_train, y_train, batch_size=batch_size, epochs=100, verbose=1, validation_split=0.2)
+    scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+   print(f"Accuracy: {scores[1]*100}")
+
+
+#################################################################################
+   
+#################################################################################
+
+
 class TestNewtonOptimizedModel(unittest.TestCase):
     def setUp(self):
         # Initialize variables for testing
