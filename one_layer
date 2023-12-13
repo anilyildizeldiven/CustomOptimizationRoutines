@@ -1,0 +1,103 @@
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.utils import to_categorical
+import matplotlib.pyplot as plt
+
+class NewtonOptimizedModel(Model): 
+    def __init__(self):
+        super(NewtonOptimizedModel, self).__init__()
+        self.dense = Dense(4, activation='relu', input_shape=(4,))  # Only one hidden layer
+        self.output_layer = Dense(3, activation='softmax')  # Output layer
+
+    def call(self, inputs):
+        x = self.dense(inputs)
+        return self.output_layer(x)
+
+        
+    def train_step(self, data):
+        x, y = data
+
+        with tf.GradientTape(persistent=True) as t2:  
+            with tf.GradientTape(persistent=True) as t1:  
+                y_pred = self(x, training=True)
+                loss = self.compiled_loss(y, y_pred)
+            
+            # Gradient for all variables
+            grads = t1.gradient(loss, self.trainable_variables)
+
+            # Hessian calculation
+            hessians = []
+            for grad, var in zip(grads, self.trainable_variables):
+                hessian = t2.jacobian(grad, var)
+                hessians.append(hessian)
+
+        # Flatten and concatenate gradients and Hessians
+        flat_grads = tf.concat([tf.reshape(grad, [-1]) for grad in grads], axis=0)
+        flat_hessians = tf.concat([tf.reshape(hessian, [flat_grads.shape[0], -1]) for hessian in hessians], axis=1)
+
+        # Regularize and compute the inverse Hessian
+        eps = 1e-4
+        eye_eps = tf.eye(flat_hessians.shape[0]) * eps
+        inv_hessian = tf.linalg.inv(flat_hessians + eye_eps)
+
+        # Compute update
+        update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, -1))
+
+        # Update all variables
+        start = 0
+        for var in self.trainable_variables:
+            size = tf.reduce_prod(var.shape)
+            var_update = tf.reshape(update[start:start + size], var.shape)
+            var.assign_sub(var_update)
+            start += size
+
+        del t1, t2
+        self.compiled_metrics.update_state(y, y_pred)
+        return {m.name: m.result() for m in self.metrics}
+    
+    
+file_path = '/Users/davidasselalou/Desktop/Applied_DL_routine/iris.csv'
+data = pd.read_csv(file_path)
+
+
+X = data.iloc[:, 0:4].values
+y = data.iloc[:, 4].values
+
+#  class values as integers
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+
+# Convert integers to dummy variables (i.e. one hot encoded)
+dummy_y = to_categorical(encoded_Y)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, 
+                                                    dummy_y, 
+                                                    test_size=0.2, 
+                                                    random_state=42)
+
+# Create and compile model
+model = NewtonOptimizedModel()
+model.compile(loss='categorical_crossentropy', 
+              metrics=['accuracy'])
+#Wich other metrices?
+
+# batch size = full size
+batch_size = X_train.shape[0]
+
+# train
+model.fit(X_train, 
+          y_train, 
+          batch_size=batch_size, 
+          epochs=30, 
+          validation_split=0.2)
+
+# Evaluate the model
+scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+print(f"Accuracy: {scores[1]*100}")
