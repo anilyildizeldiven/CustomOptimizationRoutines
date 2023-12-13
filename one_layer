@@ -19,9 +19,10 @@ class NewtonOptimizedModel(Model):
         return self.output_layer(x)
 
         
+
     def train_step(self, data):
         x, y = data
-
+    
         with tf.GradientTape(persistent=True) as t2:  
             with tf.GradientTape(persistent=True) as t1:  
                 y_pred = self(x, training=True)
@@ -29,39 +30,60 @@ class NewtonOptimizedModel(Model):
             
             # Gradient for all variables
             grads = t1.gradient(loss, self.trainable_variables)
-
+            
             # Hessian calculation
-            hessians = []
-            for grad, var in zip(grads, self.trainable_variables):
-                hessian = t2.jacobian(grad, var)
-                hessians.append(hessian)
-
-        # Flatten and concatenate gradients and Hessians
+        hessians = []
+        total_size = 0
+        for grad, var in zip(grads, self.trainable_variables):
+            hessian = t2.jacobian(grad, var)
+            hessian_flat = tf.reshape(hessian, [tf.size(var), -1])
+            hessians.append(hessian_flat)
+            total_size += tf.size(var)
+    
+        # Create a block-diagonal matrix from Hessians
+        flat_hessians = tf.zeros([total_size, total_size], dtype=tf.float32)
+        start = 0
+        for hessian in hessians:
+            size = hessian.shape[0]
+            indices = tf.range(start, start + size)
+            flat_hessians = tf.tensor_scatter_nd_update(
+                flat_hessians, 
+                tf.stack([indices, indices], axis=1), 
+                tf.linalg.diag_part(hessian)
+            )
+            start += size
+    
+        # Flatten gradients
         flat_grads = tf.concat([tf.reshape(grad, [-1]) for grad in grads], axis=0)
-        flat_hessians = tf.concat([tf.reshape(hessian, [flat_grads.shape[0], -1]) for hessian in hessians], axis=1)
-
+    
         # Regularize and compute the inverse Hessian
         eps = 1e-4
-        eye_eps = tf.eye(flat_hessians.shape[0]) * eps
+        eye_eps = tf.eye(total_size) * eps
         inv_hessian = tf.linalg.inv(flat_hessians + eye_eps)
-
+    
         # Compute update
         update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, -1))
-
+    
         # Update all variables
         start = 0
         for var in self.trainable_variables:
-            size = tf.reduce_prod(var.shape)
+            size = tf.size(var)
             var_update = tf.reshape(update[start:start + size], var.shape)
             var.assign_sub(var_update)
             start += size
-
+    
         del t1, t2
         self.compiled_metrics.update_state(y, y_pred)
         return {m.name: m.result() for m in self.metrics}
     
     
-file_path = '/Users/davidasselalou/Desktop/Applied_DL_routine/iris.csv'
+
+
+
+
+    
+    
+file_path = '/path_to/iris.csv'
 data = pd.read_csv(file_path)
 
 
