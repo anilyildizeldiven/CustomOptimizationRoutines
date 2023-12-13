@@ -1,4 +1,6 @@
-
+import matplotlib.pyplot as plt
+import os
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -11,7 +13,7 @@ import matplotlib.pyplot as plt
 class NewtonOptimizedModel(Model): 
     def __init__(self):
         super(NewtonOptimizedModel, self).__init__()
-        self.dense = Dense(4, activation='relu', input_shape=(4,))  # Only one hidden layer
+        self.dense = Dense(5, activation='relu', input_shape=(4,))  # Only one hidden layer
         self.output_layer = Dense(3, activation='softmax')  # Output layer
 
     def call(self, inputs):
@@ -22,7 +24,8 @@ class NewtonOptimizedModel(Model):
 
     def train_step(self, data):
         x, y = data
-    
+        
+
         with tf.GradientTape(persistent=True) as t2:  
             with tf.GradientTape(persistent=True) as t1:  
                 y_pred = self(x, training=True)
@@ -64,6 +67,8 @@ class NewtonOptimizedModel(Model):
         # Compute update
         update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, -1))
     
+    
+        
         # Update all variables
         start = 0
         for var in self.trainable_variables:
@@ -76,14 +81,13 @@ class NewtonOptimizedModel(Model):
         self.compiled_metrics.update_state(y, y_pred)
         return {m.name: m.result() for m in self.metrics}
     
+        
+
+
+
     
-
-
-
-
     
-    
-file_path = '/path_to/iris.csv'
+file_path = '/path_To/iris.csv'
 data = pd.read_csv(file_path)
 
 
@@ -104,6 +108,20 @@ X_train, X_test, y_train, y_test = train_test_split(X,
                                                     test_size=0.2, 
                                                     random_state=42)
 
+
+class StoreWeightNormCallback(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super(StoreWeightNormCallback, self).__init__()
+        self.weight_norms_per_epoch = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        weights = self.model.get_weights()
+        weight_norms = [np.linalg.norm(w) for w in weights]
+        self.weight_norms_per_epoch.append(weight_norms)
+        print(f"Epoch {epoch + 1}, Weight norms: {weight_norms}")
+
+        
+        
 # Create and compile model
 model = NewtonOptimizedModel()
 model.compile(loss='categorical_crossentropy', 
@@ -113,13 +131,22 @@ model.compile(loss='categorical_crossentropy',
 # batch size = full size
 batch_size = X_train.shape[0]
 
-# train
-model.fit(X_train, 
-          y_train, 
-          batch_size=batch_size, 
-          epochs=30, 
-          validation_split=0.2)
+# Train the model with the custom callback
+
+callback = StoreWeightNormCallback()
+
+model.fit(X_train, y_train, batch_size=batch_size, epochs=20, 
+          validation_split=0.2, callbacks=[callback])
+
+# After training, access the stored weight norms
+epoch_weight_norms = callback.weight_norms_per_epoch
+
+# You can now print or analyze epoch_weight_norms
+print(epoch_weight_norms)
 
 # Evaluate the model
 scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
 print(f"Accuracy: {scores[1]*100}")
+
+
+
