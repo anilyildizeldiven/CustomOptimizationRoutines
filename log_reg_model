@@ -1,0 +1,146 @@
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.utils import to_categorical
+import matplotlib.pyplot as plt
+
+
+class LogisticRegressionModel(Model): 
+    def __init__(self):
+        super(LogisticRegressionModel, self).__init__()
+        # Only one layer for logistic regression. Assuming output for 3 classes.
+        self.output_layer = Dense(3, activation='softmax', input_shape=(4,))
+
+    def call(self, inputs):
+        return self.output_layer(inputs)
+
+        
+
+    def train_step(self, data):
+        x, y = data
+        
+
+        with tf.GradientTape(persistent=True) as t2:  
+            with tf.GradientTape(persistent=True) as t1:  
+                y_pred = self(x, training=True)
+                loss = self.compiled_loss(y, y_pred)
+            
+            # Gradient for all variables
+            grads = t1.gradient(loss, self.trainable_variables)
+            
+            # Hessian calculation
+        hessians = []
+        total_size = 0
+        for grad, var in zip(grads, self.trainable_variables):
+            hessian = t2.jacobian(grad, var)
+            hessian_flat = tf.reshape(hessian, [tf.size(var), -1])
+            hessians.append(hessian_flat)
+            total_size += tf.size(var)
+    
+        # Create a block-diagonal matrix from Hessians
+        flat_hessians = tf.zeros([total_size, total_size], dtype=tf.float32)
+        start = 0
+        for hessian in hessians:
+            size = hessian.shape[0]
+            indices = tf.range(start, start + size)
+            flat_hessians = tf.tensor_scatter_nd_update(
+                flat_hessians, 
+                tf.stack([indices, indices], axis=1), 
+                tf.linalg.diag_part(hessian)
+            )
+            start += size
+    
+        # Flatten gradients
+        flat_grads = tf.concat([tf.reshape(grad, [-1]) for grad in grads], axis=0)
+    
+        # Regularize and compute the inverse Hessian
+        eps = 1e-4
+        eye_eps = tf.eye(total_size) * eps
+        inv_hessian = tf.linalg.inv(flat_hessians + eye_eps)
+    
+        # Compute update
+        update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, -1))
+    
+    
+        
+        # Update all variables
+        start = 0
+        for var in self.trainable_variables:
+            size = tf.size(var)
+            var_update = tf.reshape(update[start:start + size], var.shape)
+            var.assign_sub(var_update)
+            start += size
+    
+        del t1, t2
+        self.compiled_metrics.update_state(y, y_pred)
+        return {m.name: m.result() for m in self.metrics}
+    
+        
+
+
+# Load Data
+file_path = '/path_to/iris.csv'
+data = pd.read_csv(file_path)
+
+# Prepare Data
+X = data.iloc[:, 0:4].values
+y = data.iloc[:, 4].values
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+dummy_y = to_categorical(encoded_Y)
+
+# Split Data
+X_train, X_test, y_train, y_test = train_test_split(X, dummy_y, test_size=0.2, random_state=42)
+
+class StoreWeightNormCallback(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super(StoreWeightNormCallback, self).__init__()
+        self.weight_norms_per_epoch = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        weights = self.model.get_weights()
+        weight_norms = [np.linalg.norm(w) for w in weights]
+        self.weight_norms_per_epoch.append(weight_norms)
+        print(f"Epoch {epoch + 1}, Weight norms: {weight_norms}")
+        
+# Create and Compile Model
+model = LogisticRegressionModel()
+model.compile(loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Training Parameters
+batch_size = X_train.shape[0]
+
+# Train Model
+model.fit(X_train, y_train, batch_size=batch_size, epochs=5, validation_split=0.2)
+
+# Evaluate Model
+scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+print(f"Accuracy: {scores[1]*100}")
+
+# Train the model with the custom callback
+
+callback = StoreWeightNormCallback()
+
+model.fit(X_train, y_train, batch_size=batch_size, epochs=300, 
+          validation_split=0.2, callbacks=[callback])
+
+# After training, access the stored weight norms
+epoch_weight_norms = callback.weight_norms_per_epoch
+
+# You can now print or analyze epoch_weight_norms
+print(epoch_weight_norms)
+
+# Evaluate the model
+scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+print(f"Accuracy: {scores[1]*100}")
+
+
+
+
