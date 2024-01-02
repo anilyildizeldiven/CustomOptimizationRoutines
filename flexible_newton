@@ -23,49 +23,86 @@ class NewtonOptimizedModel(Model):
     #     return self.output_layer(inputs)
     
     
+    # def __init__(self):
+    #     super(NewtonOptimizedModel, self).__init__()
+    #     self.dense = Dense(15, activation='relu', input_shape=(13,))
+    #     self.output_layer = Dense(3, activation='softmax')
+
+    # def call(self, inputs):
+    #     x = self.dense(inputs)
+    #     return self.output_layer(x)
+
+# One Layer
     def __init__(self):
         super(NewtonOptimizedModel, self).__init__()
         self.dense = Dense(15, activation='relu', input_shape=(13,))
+        self.dense2 = Dense(10, activation='relu')
+        # Additional layers
+        self.dense3 = Dense(10, activation='relu')
+        self.dense4 = Dense(10, activation='relu')
+        self.dense5 = Dense(10, activation='relu')
+        self.dense6 = Dense(10, activation='relu')
+        self.dense7 = Dense(10, activation='relu')
+        self.dense8 = Dense(10, activation='relu')
+        self.dense9 = Dense(10, activation='relu')
+        self.dense10 = Dense(10, activation='relu')
+        self.dense11 = Dense(10, activation='relu')
+        self.dense12 = Dense(10, activation='relu')
         self.output_layer = Dense(3, activation='softmax')
 
     def call(self, inputs):
         x = self.dense(inputs)
+        x = self.dense2(x)
+        # Forward pass through the additional layers
+        x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
+        x = self.dense6(x)
+        x = self.dense7(x)
+        x = self.dense8(x)
+        x = self.dense9(x)
+        x = self.dense10(x)
+        x = self.dense11(x)
+        x = self.dense12(x)
         return self.output_layer(x)
+
 
 
 # Block 2
 def train_step(self, data):
     x, y = data
 
+    # Compute the loss and first-order gradients
     with tf.GradientTape() as tape:
-        with tf.GradientTape(persistent=True) as t2:
+        y_pred = self(x, training=True)
+        loss = self.compiled_loss(y, y_pred)
+    grads = tape.gradient(loss, self.trainable_variables)
+
+    # Flatten the gradients and variables for Hessian computation
+    flat_grads = tf.concat([tf.reshape(g, [-1]) for g in grads], axis=0)
+    flat_vars = tf.concat([tf.reshape(v, [-1]) for v in self.trainable_variables], axis=0)
+
+    # Compute the Hessian
+    with tf.GradientTape() as hessian_tape:
+        hessian_tape.watch(flat_vars)
+        with tf.GradientTape() as inner_tape:
+            inner_tape.watch(flat_vars)
+            # Re-evaluate the loss with flattened variables
+            flat_vars_assign = [tf.reshape(v, [-1]) for v in self.trainable_variables]
+            reconstructed_vars = tf.dynamic_stitch([tf.range(tf.size(v)) for v in flat_vars_assign], flat_vars_assign)
+            self.set_weights(reconstructed_vars)  # Set flattened weights to model
             y_pred = self(x, training=True)
             loss = self.compiled_loss(y, y_pred)
-            t2.watch(self.trainable_variables)
-        grads = tape.gradient(loss, self.trainable_variables)
+        inner_grads = inner_tape.gradient(loss, flat_vars)
+    hessian = hessian_tape.jacobian(inner_grads, flat_vars)
+    hessian = tf.reshape(hessian, [tf.size(flat_vars), tf.size(flat_vars)])
 
-    # Compute the full Hessian
-    hessian = []
-    for g in grads:
-        hessian_rows = []
-        for v in self.trainable_variables:
-            hessian_row = t2.jacobian(g, v)
-            if hessian_row is None:
-                # If the gradient is None, it implies that this part of the Hessian is zero
-                hessian_row = tf.zeros_like(v)
-            hessian_rows.append(tf.reshape(hessian_row, [-1]))
-        hessian.append(tf.concat(hessian_rows, axis=0))
-    full_hessian = tf.concat(hessian, axis=0)
-
-    # Flatten gradients
-    flat_grads = tf.concat([tf.reshape(g, [-1]) for g in grads], axis=0)
-
-    # Regularize and invert Hessian
+    # Regularize and invert the Hessian
     eps = 1e-4  # Regularization term
-    hessian_reg = full_hessian + tf.eye(tf.size(flat_grads)) * eps
+    hessian_reg = hessian + tf.eye(tf.size(flat_vars)) * eps
     inv_hessian = tf.linalg.inv(hessian_reg)
 
-    # Compute update using the inverse Hessian
+    # Compute the update using the inverse Hessian
     update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, 1))
     update = tf.split(update, [tf.size(v) for v in self.trainable_variables])
 
@@ -73,14 +110,14 @@ def train_step(self, data):
     for var, u in zip(self.trainable_variables, update):
         var.assign_sub(tf.reshape(u, var.shape))
 
-    del tape, t2
+    # Update the metrics
     self.compiled_metrics.update_state(y, y_pred)
     return {m.name: m.result() for m in self.metrics}
 
 
 
 #Block 3 
-##DATA: https://archive.ics.uci.edu/datasets    
+##DATA: https://archive.ics.uci.edu/datasets
 # Load the wine dataset
 file_path = '/path_to/wine.csv'
 data = pd.read_csv(file_path)
