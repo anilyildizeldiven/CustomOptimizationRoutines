@@ -34,53 +34,51 @@ class NewtonOptimizedModel(Model):
 
 
 
-# Block 2
+# Block 2: Modified Train Step with Block-Diagonal Hessian Approximation
 def train_step(self, data):
     x, y = data
 
-    with tf.GradientTape() as tape:
-        with tf.GradientTape(persistent=True) as t2:
+    with tf.GradientTape(persistent=True) as t2:  
+        with tf.GradientTape(persistent=True) as tape:  
             y_pred = self(x, training=True)
             loss = self.compiled_loss(y, y_pred)
-            t2.watch(self.trainable_variables)
-        grads = tape.gradient(loss, self.trainable_variables)
 
-    # Compute the full Hessian
-    hessian = []
-    for g in grads:
-        hessian_rows = []
-        for v in self.trainable_variables:
-            hessian_row = t2.gradient(g, v)
-            if hessian_row is None:
-                # If the gradient is None, it implies that this part of the Hessian is zero
-                hessian_row = tf.zeros_like(v)
-            hessian_rows.append(tf.reshape(hessian_row, [-1]))
-        hessian.append(tf.concat(hessian_rows, axis=0))
-    full_hessian = tf.concat(hessian, axis=0)
+    # Compute gradients for all layers
+            grads = tape.gradient(loss, self.trainable_variables)
 
-    # Flatten gradients
-    flat_grads = tf.concat([tf.reshape(g, [-1]) for g in grads], axis=0)
+    # Hessian calculation for each layer
+    hessians = {}
+    for grad, var in zip(grads, self.trainable_variables):
+        # Compute Hessian for this layer
+        hessian = t2.jacobian(grad, var)
+        hessian = tf.reshape(hessian, [tf.size(var), tf.size(var)])  # Reshape to 2D
+        hessians[var.name] = hessian
 
-    # Regularize and invert Hessian
+    # Regularize and invert Hessian blocks
     eps = 1e-4  # Regularization term
-    hessian_reg = full_hessian + tf.eye(tf.size(flat_grads)) * eps
-    inv_hessian = tf.linalg.inv(hessian_reg)
+    for var in self.trainable_variables:
+        hessian_block = hessians[var.name]
+        # Regularize the Hessian block
+        hessian_reg = hessian_block + tf.eye(tf.shape(hessian_block)[0]) * eps
+        # Invert the regularized Hessian block
+        inv_hessian_block = tf.linalg.inv(hessian_reg)
 
-    # Compute update using the inverse Hessian
-    update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, 1))
-    update = tf.split(update, [tf.size(v) for v in self.trainable_variables])
-
-    # Apply updates to each variable
-    for var, u in zip(self.trainable_variables, update):
-        var.assign_sub(tf.reshape(u, var.shape))
+        # Compute update using the inverse Hessian block
+        grad = tape.gradient(loss, var)
+        update = tf.linalg.matmul(inv_hessian_block, tf.reshape(grad, [-1, 1]))
+        var.assign_sub(tf.reshape(update, var.shape))
 
     del tape, t2
     self.compiled_metrics.update_state(y, y_pred)
     return {m.name: m.result() for m in self.metrics}
 
 
+    
 
-#Block 3 
+
+
+
+#Block 6   
     
 # Load the wine dataset
 file_path = '/path_to/wine.csv'
@@ -101,7 +99,7 @@ dummy_y = to_categorical(encoded_Y)
 # Split the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, dummy_y, test_size=0.25, random_state=42)
 
-#Block 4
+#Block 7
 
     
     
@@ -116,7 +114,7 @@ class StoreWeightNormCallback(tf.keras.callbacks.Callback):
         self.weight_norms_per_epoch.append(weight_norms)
         print(f"Epoch {epoch + 1}, Weight norms: {weight_norms}")
         
-#Block 5
+#Block 8
         
 # Adjust the model architecture as necessary based on the wine dataset features
 model = NewtonOptimizedModel()
@@ -131,7 +129,7 @@ model.fit(X_train, y_train, batch_size=batch_size, epochs=100, validation_split=
 
 
 
-#Block 6
+#Block 9
 
 # Access the stored weight norms
 epoch_weight_norms = callback.weight_norms_per_epoch
