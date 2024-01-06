@@ -98,7 +98,7 @@ def train_step(self, data):
     hessian = hessian_tape.jacobian(flat_grads, flat_vars)
     hessian = tf.reshape(hessian, [tf.size(flat_vars), tf.size(flat_vars)])
 #UNITTEST: Hessian change and complete
-#UNITTEST: number of entries in gradient and hessian vector/matrix different to full-newton
+#UNITTEST: Hessian smaller than with full newton approach?
 
     # Regularize and invert the Hessian to ensure numerical stability
     eps = 1e-4  # Small regularization constant
