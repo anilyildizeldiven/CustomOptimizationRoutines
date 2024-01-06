@@ -1,0 +1,185 @@
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.utils import to_categorical
+import matplotlib.pyplot as plt
+from tensorflow.keras.initializers import RandomNormal, Constant
+
+#Block 1
+class NewtonOptimizedModel(Model): 
+#Logistic Regression (No hidden Layer)
+    # def __init__(self):
+    #     super(NewtonOptimizedModel, self).__init__()
+    #     # Only one layer for logistic regression. Assuming output for 3 classes.
+    #     self.output_layer = Dense(3, activation='softmax', input_shape=(4,))
+
+    # def call(self, inputs):
+    #     return self.output_layer(inputs)
+    
+    
+    # def __init__(self):
+    #     super(NewtonOptimizedModel, self).__init__()
+    #     self.dense = Dense(15, activation='relu', input_shape=(13,))
+    #     self.output_layer = Dense(3, activation='softmax')
+
+    # def call(self, inputs):
+    #     x = self.dense(inputs)
+    #     return self.output_layer(x)
+
+# One Layer
+    def __init__(self):
+        super(NewtonOptimizedModel, self).__init__()
+        self.dense = Dense(15, activation='relu', input_shape=(13,))
+        self.dense2 = Dense(10, activation='relu')
+        # Additional layers
+        self.dense3 = Dense(10, activation='relu')
+        self.dense4 = Dense(10, activation='relu')
+        self.dense5 = Dense(10, activation='relu')
+        self.dense6 = Dense(10, activation='relu')
+        self.dense7 = Dense(10, activation='relu')
+        self.dense8 = Dense(10, activation='relu')
+        self.dense9 = Dense(10, activation='relu')
+        self.dense10 = Dense(10, activation='relu')
+        self.dense11 = Dense(10, activation='relu')
+        self.dense12 = Dense(10, activation='relu')
+        self.output_layer = Dense(3, activation='softmax')
+
+    def call(self, inputs):
+        x = self.dense(inputs)
+        x = self.dense2(x)
+        # Forward pass through the additional layers
+        x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
+        x = self.dense6(x)
+        x = self.dense7(x)
+        x = self.dense8(x)
+        x = self.dense9(x)
+        x = self.dense10(x)
+        x = self.dense11(x)
+        x = self.dense12(x)
+        return self.output_layer(x)
+
+
+
+# Block 2
+def train_step(self, data):
+    # Unpack the data into features and labels
+    x, y = data
+
+
+    #flat_grads = tf.concat([tf.reshape(g, [-1]) for g in sub_sampled_grads], axis=0)
+    flat_vars = tf.concat([tf.reshape(v, [-1]) for v in self.trainable_variables], axis=0)
+
+    # Compute the Hessian matrix, a second-order derivative of the loss
+    with tf.GradientTape() as hessian_tape:
+        hessian_tape.watch(flat_vars)
+        with tf.GradientTape() as inner_tape:
+            inner_tape.watch(flat_vars)
+            # Recompute the loss after flattening the variables
+            flat_vars_assign = [tf.reshape(v, [-1]) for v in self.trainable_variables]
+            reconstructed_vars = tf.dynamic_stitch([tf.range(tf.size(v)) for v in flat_vars_assign], flat_vars_assign)
+            self.set_weights(reconstructed_vars)  # Update model weights with flattened variables
+            y_pred = self(x, training=True)
+            loss = self.compiled_loss(y, y_pred)
+#UNITTEST: Loss change
+        grads = inner_tape.gradient(loss, self.trainable_variables)
+#UNITTEST: grads change
+        sub_sampling_rate = 0.7  # Set sub-sampling rate
+        sampled_grad_indices = np.random.choice(len(grads), int(len(grads) * sub_sampling_rate), replace=False)
+        sub_sampled_grads = [grads[i] for i in sampled_grad_indices]
+        flat_grads = tf.concat([tf.reshape(g, [-1]) for g in sub_sampled_grads], axis=0)
+    hessian = hessian_tape.jacobian(flat_grads, flat_vars)
+    hessian = tf.reshape(hessian, [tf.size(flat_vars), tf.size(flat_vars)])
+#UNITTEST: Hessian change and complete
+#UNITTEST: number of entries in gradient and hessian vector/matrix different to full-newton
+
+    # Regularize and invert the Hessian to ensure numerical stability
+    eps = 1e-4  # Small regularization constant
+    hessian_reg = hessian + tf.eye(tf.size(flat_vars)) * eps
+    inv_hessian = tf.linalg.inv(hessian_reg)
+#UNITTEST: hessian inversion
+
+    # Calculate the parameter update using the inverse Hessian
+    update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, 1))
+    update = tf.split(update, [tf.size(v) for v in self.trainable_variables])
+#UNITTEST: update successful
+    # Apply the calculated update to each model variable
+    for var, u in zip(self.trainable_variables, update):
+        var.assign_sub(tf.reshape(u, var.shape))
+
+    # Update the model's metrics based on the outputs
+    self.compiled_metrics.update_state(y, y_pred)
+    # Return the computed metrics
+    return {m.name: m.result() for m in self.metrics}
+
+
+
+#Block 3 
+    
+# Load the wine dataset
+file_path = '/path_to/wine.csv'
+data = pd.read_csv(file_path)
+
+# Assuming the target variable is in the first column
+X = data.iloc[:, 1:].values
+y = data.iloc[:, 0].values
+
+# Encode class values as integers
+encoder = LabelEncoder()
+encoder.fit(y)
+encoded_Y = encoder.transform(y)
+
+# Convert integers to dummy variables (one hot encoded)
+dummy_y = to_categorical(encoded_Y)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, dummy_y, test_size=0.25, random_state=42)
+
+#Block 4
+
+    
+    
+class StoreWeightNormCallback(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super(StoreWeightNormCallback, self).__init__()
+        self.weight_norms_per_epoch = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        weights = self.model.get_weights()
+        weight_norms = [np.linalg.norm(w) for w in weights]
+        self.weight_norms_per_epoch.append(weight_norms)
+        print(f"Epoch {epoch + 1}, Weight norms: {weight_norms}")
+        
+#Block 5
+        
+# Adjust the model architecture as necessary based on the wine dataset features
+model = NewtonOptimizedModel()
+model.compile(loss='categorical_crossentropy', metrics=['accuracy'])
+#UNITTEST: loss converging to minimum
+
+# Batch size and training process
+batch_size = X_train.shape[0]
+callback = StoreWeightNormCallback()
+
+model.fit(X_train, y_train, batch_size=batch_size, epochs=150, validation_split=0.25, callbacks=[callback])
+#UNITTEST: change in metrics and weights after each epoch
+
+
+
+#Block 6
+
+# Access the stored weight norms
+epoch_weight_norms = callback.weight_norms_per_epoch
+print(epoch_weight_norms)
+
+# Evaluate the model
+scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+print(f"Accuracy: {scores[1]*100}")
+
