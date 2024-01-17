@@ -12,7 +12,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.utils import get_custom_objects
 import numpy as np
-
+from sklearn.preprocessing import StandardScaler
 # Annahme: NewtonOptimizer ist deine benutzerdefinierte Optimiererklasse
 from customOptimizer import NewtonOptimizer  # Stelle sicher, dass du den korrekten Pfad ersetzt
 import matplotlib.pyplot as plt
