@@ -11,14 +11,19 @@ from tensorflow.keras.utils import to_categorical
 import matplotlib.pyplot as plt
 
 
-class LogisticRegressionModel(Model): 
+class NewtonOptimizedModel(Model): 
     def __init__(self):
-        super(LogisticRegressionModel, self).__init__()
-        # Only one layer for logistic regression. Assuming output for 3 classes.
-        self.output_layer = Dense(3, activation='softmax', input_shape=(4,))
+        super(NewtonOptimizedModel, self).__init__()
+        self.dense = Dense(15, activation='relu', input_shape=(4,))
+        self.dense1 = Dense(10, activation='relu')
+        #self.dense2 = Dense(10, activation='relu')
+        self.output_layer = Dense(3, activation='softmax')
 
     def call(self, inputs):
-        return self.output_layer(inputs)
+        x = self.dense(inputs)
+        x = self.dense1(x)
+        #x = self.dense2(x)
+        return self.output_layer(x)
 
         
 
@@ -111,7 +116,7 @@ class StoreWeightNormCallback(tf.keras.callbacks.Callback):
         print(f"Epoch {epoch + 1}, Weight norms: {weight_norms}")
         
 # Create and Compile Model
-model = LogisticRegressionModel()
+model = NewtonOptimizedModel()
 model.compile(loss='categorical_crossentropy', metrics=['accuracy'])
 
 # Training Parameters
