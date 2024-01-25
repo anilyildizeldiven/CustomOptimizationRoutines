@@ -1,10 +1,6 @@
-from tensorflow.python.framework import ops
-from tensorflow.python.ops import gen_training_ops
-from tensorflow.python.ops import math_ops
 from tensorflow.python.training import optimizer
-from tensorflow.python.util.tf_export import tf_export
 import tensorflow as tf
-import numpy as np
+
 
 class TestGD(optimizer.Optimizer):
   def __init__(self,
@@ -46,3 +42,6 @@ class TestGD(optimizer.Optimizer):
   def _apply_sparse(self, grad, var):
     raise NotImplementedError("Sparse gradient updates are not supported.")
 
+  def get_config(self):
+    config = super(TestGD, self).get_config()
+    return config
