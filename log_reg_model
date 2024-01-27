@@ -9,24 +9,33 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.utils import to_categorical
 import matplotlib.pyplot as plt
+from tensorflow.keras.initializers import RandomNormal
 
 
+# Block 1
 class NewtonOptimizedModel(Model): 
+
+
     def __init__(self):
         super(NewtonOptimizedModel, self).__init__()
-        self.dense = Dense(15, activation='relu', input_shape=(4,))
-        self.dense1 = Dense(10, activation='relu')
-        #self.dense2 = Dense(10, activation='relu')
-        self.output_layer = Dense(3, activation='softmax')
+        self.dense = Dense(15, activation='tanh', input_shape=(4,), kernel_initializer=RandomNormal())
+        self.dense1 = Dense(10, activation='tanh', kernel_initializer=RandomNormal())
+        self.output_layer = Dense(3, activation='softmax', kernel_initializer=RandomNormal())
 
     def call(self, inputs):
         x = self.dense(inputs)
         x = self.dense1(x)
-        #x = self.dense2(x)
         return self.output_layer(x)
 
-        
+    # def __init__(self):
+    #     super(NewtonOptimizedModel, self).__init__()
+    #     # Only one layer for logistic regression. Assuming output for 3 classes.
+    #     self.output_layer = Dense(3, activation='softmax', input_shape=(4,))
 
+    # def call(self, inputs):
+    #     return self.output_layer(inputs)
+       
+# Block 2
     def train_step(self, data):
         x, y = data
         
@@ -38,7 +47,10 @@ class NewtonOptimizedModel(Model):
             
             # Gradient for all variables
             grads = t1.gradient(loss, self.trainable_variables)
-            
+            #sub_sampling_rate = 0.7
+            #sampled_grad_indices = np.random.choice(len(grads), int(len(grads) * sub_sampling_rate), replace=False)
+            #sub_sampled_grads = [grads[i] for i in sampled_grad_indices]
+            #flat_grads = tf.concat([tf.reshape(g, [-1]) for g in grads], axis=0)
             # Hessian calculation
         hessians = []
         total_size = 0
@@ -65,14 +77,15 @@ class NewtonOptimizedModel(Model):
         flat_grads = tf.concat([tf.reshape(grad, [-1]) for grad in grads], axis=0)
     
         # Regularize and compute the inverse Hessian
-        eps = 1e-4
+        eps = 1e-3
         eye_eps = tf.eye(total_size) * eps
         inv_hessian = tf.linalg.inv(flat_hessians + eye_eps)
+        inv_hessian = tf.where(tf.abs(inv_hessian) < eps, eps * tf.ones_like(inv_hessian), inv_hessian)
     
         # Compute update
         update = tf.linalg.matmul(inv_hessian, tf.expand_dims(flat_grads, -1))
     
-    
+
         
         # Update all variables
         start = 0
@@ -86,7 +99,7 @@ class NewtonOptimizedModel(Model):
         self.compiled_metrics.update_state(y, y_pred)
         return {m.name: m.result() for m in self.metrics}
     
-        
+# Block 4        
 
 
 # Load Data
@@ -123,18 +136,18 @@ model.compile(loss='categorical_crossentropy', metrics=['accuracy'])
 batch_size = X_train.shape[0]
 
 # Train Model
-model.fit(X_train, y_train, batch_size=batch_size, epochs=5, validation_split=0.2)
+#model.fit(X_train, y_train, batch_size=batch_size, epochs=5, validation_split=0.2)
 
 # Evaluate Model
-scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
-print(f"Accuracy: {scores[1]*100}")
+#scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
+#print(f"Accuracy: {scores[1]*100}")
 
 # Train the model with the custom callback
 
 callback = StoreWeightNormCallback()
 
-model.fit(X_train, y_train, batch_size=batch_size, epochs=300, 
-          validation_split=0.2, callbacks=[callback])
+model.fit(X_train, y_train, batch_size=batch_size, epochs=30, 
+          validation_split=0.25, callbacks=[callback])
 
 # After training, access the stored weight norms
 epoch_weight_norms = callback.weight_norms_per_epoch
@@ -145,7 +158,5 @@ print(epoch_weight_norms)
 # Evaluate the model
 scores = model.evaluate(X_test, y_test, batch_size=batch_size, verbose="auto")
 print(f"Accuracy: {scores[1]*100}")
-
-
 
 
